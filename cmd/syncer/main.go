@@ -7,20 +7,24 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/lib/pq"
-	_ "github.com/microsoft/go-mssqldb"
-)
-
-const (
-	ProfitConnStr = "server=192.168.4.20;user id=profit;password=profit;port=1433;database=CRISTM25"
-	PgConnStr     = "postgres://postgres:secret@localhost:5432/profit_ecommerce?sslmode=disable"
+	"profit-ecommerce/internal/config"
+	"profit-ecommerce/internal/db"
 )
 
 func main() {
-	// 1. CONEXIONES (Persistentes)
-	profitDB := connectDB("sqlserver", ProfitConnStr)
+	cfg := config.Load()
+
+	// 1. CONEXIONES
+	profitDB, err := db.ConnectSQLServer(cfg.ProfitDBURL)
+	if err != nil {
+		log.Fatalf("Error conectando a Profit: %v", err) // Fatalf para salir si falla la DB crítica
+	}
 	defer profitDB.Close()
-	pgDB := connectDB("postgres", PgConnStr)
+
+	pgDB, err := db.ConnectPostgres(cfg.PostgresURL)
+	if err != nil {
+		log.Fatalf("Error conectando a Postgres: %v", err)
+	}
 	defer pgDB.Close()
 
 	fmt.Println("Worker Iniciado. Esperando ciclos...")
@@ -57,6 +61,7 @@ func main() {
 	}
 }
 
+
 // --- GRUPOS DE SINCRONIZACIÓN ---
 
 // runSlowSync: Tablas "estáticas" o de configuración
@@ -79,7 +84,7 @@ func runSlowSync(profitDB, pgDB *sql.DB) {
 func runFastSync(profitDB, pgDB *sql.DB) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println("⚠️ Error recuperado en Fast Sync:", r)
+			fmt.Println("Error recuperado en Fast Sync:", r)
 		}
 	}()
 
@@ -331,9 +336,10 @@ func syncArts(source, dest *sql.DB) {
 			tipo_imp,
 			COALESCE(co_lin, ''),
 			COALESCE(co_cat, ''),
-			COALESCE(co_subl, '')
+			COALESCE(co_subl, ''),
+			COALESCE(campo4, '')
 		FROM art
-		WHERE anulado = 0
+		WHERE anulado = 0 AND art_des NOT LIKE '%NO USAR%'
 	`
 
 	rows, err := source.Query(query)
@@ -344,10 +350,10 @@ func syncArts(source, dest *sql.DB) {
 
 	count := 0
 	for rows.Next() {
-		var co_art, art_des, tipo_imp, co_lin, co_cat, co_subl string
+		var co_art, art_des, tipo_imp, co_lin, co_cat, co_subl, campo4 string
 		var stock_act, prec_vta1, prec_vta2, prec_vta3, prec_vta4, prec_vta5 float64
 
-		if err := rows.Scan(&co_art, &art_des, &stock_act, &prec_vta1, &prec_vta2, &prec_vta3, &prec_vta4, &prec_vta5, &tipo_imp, &co_lin, &co_cat, &co_subl); err != nil {
+		if err := rows.Scan(&co_art, &art_des, &stock_act, &prec_vta1, &prec_vta2, &prec_vta3, &prec_vta4, &prec_vta5, &tipo_imp, &co_lin, &co_cat, &co_subl, &campo4); err != nil {
 			log.Println("Error scan:", err)
 			continue
 		}
@@ -367,8 +373,8 @@ func syncArts(source, dest *sql.DB) {
 		imageUrl := fmt.Sprintf("https://imagenes.cristmedicals.com/imagenes-v3/imagenes/%s.jpg", cleanCoArt)
 
 		_, err := dest.Exec(`
-			INSERT INTO art (co_art, art_des, stock_act, prec_vta1, prec_vta2, prec_vta3, prec_vta4, prec_vta5, tipo_imp, co_lin, co_cat, co_subl, image_url, last_sync)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+			INSERT INTO art (co_art, art_des, stock_act, prec_vta1, prec_vta2, prec_vta3, prec_vta4, prec_vta5, tipo_imp, co_lin, co_cat, co_subl, campo4, image_url, last_sync)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
 			ON CONFLICT (co_art) DO UPDATE SET
 			        art_des = EXCLUDED.art_des,
 			        stock_act = EXCLUDED.stock_act,
@@ -381,6 +387,7 @@ func syncArts(source, dest *sql.DB) {
 					co_lin = EXCLUDED.co_lin,
 					co_cat = EXCLUDED.co_cat,
 					co_subl = EXCLUDED.co_subl,
+					campo4 = EXCLUDED.campo4,
 			    	image_url = EXCLUDED.image_url,
 					last_sync = NOW();
 		`,
@@ -391,6 +398,7 @@ func syncArts(source, dest *sql.DB) {
 			toNull(co_lin),
 			toNull(co_cat),
 			toNull(co_subl),
+			toNull(campo4),
 			imageUrl,
 		)
 
@@ -403,13 +411,4 @@ func syncArts(source, dest *sql.DB) {
 	fmt.Printf("\nTotal de articulos sincronizados: %d\n", count)
 }
 
-func connectDB(driver, connStr string) *sql.DB {
-	db, err := sql.Open(driver, connStr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := db.Ping(); err != nil {
-		log.Fatal(err)
-	}
-	return db
-}
+

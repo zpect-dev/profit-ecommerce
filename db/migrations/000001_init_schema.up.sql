@@ -33,6 +33,7 @@ CREATE TABLE art (
     co_lin VARCHAR(6),
     co_cat VARCHAR(6),
     co_subl VARCHAR(6),
+    campo4 VARCHAR(60),
 
     -- Datos para la web
     image_url VARCHAR(255),

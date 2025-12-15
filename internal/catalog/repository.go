@@ -114,7 +114,7 @@ func (r *Repository) ListProducts(page, limit int, search string) ([]Product, er
              COALESCE(a.image_url, ''),
              COALESCE(a.inventory_json, '{}') -- ¡Lectura directa!
         FROM art a
-        WHERE (a.art_des ILIKE $1 OR a.co_art ILIKE $1)
+        WHERE (a.art_des ILIKE $1 OR a.co_art ILIKE $1 OR a.campo4 ILIKE $1)
         ORDER BY a.art_des ASC
         LIMIT $2 OFFSET $3
      `

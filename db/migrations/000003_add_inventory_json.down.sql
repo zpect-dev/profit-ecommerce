@@ -1,1 +1,1 @@
-ALTER TABLE art DROP COLUMN inventory_json JSONB;
+ALTER TABLE art DROP COLUMN inventory_json;
