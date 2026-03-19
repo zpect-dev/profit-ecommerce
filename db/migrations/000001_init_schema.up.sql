@@ -53,5 +53,5 @@ CREATE TABLE IF NOT EXISTS descuen (
     porc1 DECIMAL(18, 2)
     );
 
-CREATE INDEX idx_art_line ON art(co_lin);
-CREATE INDEX idx_art_art_des ON art(art_des);
+CREATE INDEX IF NOT EXISTS idx_art_line ON art(co_lin);
+CREATE INDEX IF NOT EXISTS idx_art_art_des ON art(art_des);

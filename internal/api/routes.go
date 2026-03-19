@@ -3,15 +3,14 @@ package api
 import (
 	"net/http"
 	"profit-ecommerce/internal/api/handlers"
-	"profit-ecommerce/internal/catalog"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"github.com/jmoiron/sqlx"
 )
 
-func NewRouter(db *sqlx.DB) http.Handler {
+// NewRouter crea el router HTTP. Recibe dependencias ya construidas (DI desde cmd/api/main.go).
+func NewRouter(catHandler *handlers.CatalogHandler) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger)
@@ -25,9 +24,6 @@ func NewRouter(db *sqlx.DB) http.Handler {
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
-
-	catRepo := catalog.NewRepository(db)
-	catHandler := handlers.NewCatalogHandler(catRepo)
 
 	r.Route("/v1", func(r chi.Router) {
 

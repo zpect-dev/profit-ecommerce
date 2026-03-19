@@ -11,10 +11,10 @@ import (
 )
 
 type CatalogHandler struct {
-	repo *catalog.Repository
+	repo catalog.CatalogRepository
 }
 
-func NewCatalogHandler(repo *catalog.Repository) *CatalogHandler {
+func NewCatalogHandler(repo catalog.CatalogRepository) *CatalogHandler {
 	return &CatalogHandler{repo: repo}
 }
 
@@ -36,7 +36,7 @@ func (h *CatalogHandler) GetByIDs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	products, err := h.repo.GetProductsByIDs(req.IDs)
+	products, err := h.repo.GetProductsByIDs(r.Context(), req.IDs)
 	if err != nil {
 		fmt.Printf("Error obteniendo productos batch: %v\n", err)
 		http.Error(w, "Error interno del servidor", http.StatusInternalServerError)
@@ -58,7 +58,7 @@ func (h *CatalogHandler) Single(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	product, err := h.repo.GetByID(id)
+	product, err := h.repo.GetByID(r.Context(), id)
 	if err != nil {
 		fmt.Printf("Error: %s", err)
 		http.Error(w, "Erro interno en el servidor", http.StatusInternalServerError)
@@ -76,6 +76,8 @@ func (h *CatalogHandler) List(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	category := r.URL.Query().Get("category")
+	inStock := r.URL.Query().Get("in_stock") == "true" || r.URL.Query().Get("in_stock") == "1"
+	hasDiscount := r.URL.Query().Get("has_discount") == "true" || r.URL.Query().Get("has_discount") == "1"
 
 	if page < 1 {
 		page = 1
@@ -85,7 +87,7 @@ func (h *CatalogHandler) List(w http.ResponseWriter, r *http.Request) {
 		limit = 20
 	}
 
-	products, err := h.repo.ListProducts(page, limit, q, category)
+	products, err := h.repo.ListProducts(r.Context(), page, limit, q, category, inStock, hasDiscount)
 	if err != nil {
 		http.Error(w, "Error interno del servidor", http.StatusInternalServerError)
 		return
@@ -101,7 +103,7 @@ func (h *CatalogHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CatalogHandler) Categories(w http.ResponseWriter, r *http.Request) {
-	categories, err := h.repo.ListCategories()
+	categories, err := h.repo.ListCategories(r.Context())
 	if err != nil {
 		http.Error(w, "Error interno del servidor", http.StatusInternalServerError)
 		return
