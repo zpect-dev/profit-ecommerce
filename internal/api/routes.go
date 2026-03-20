@@ -34,18 +34,18 @@ func NewRouter(catHandler *handlers.CatalogHandler, cartHandler *cart.CartHandle
 		// --- Ruta Pública (sin autenticación) ---
 		r.Post("/auth/login", authHandler.HandleLogin)
 
+		r.Route("/products", func(r chi.Router) {
+			r.Get("/", catHandler.List)
+			r.Get("/{id}", catHandler.Single)
+			r.Get("/categories", catHandler.Categories)
+			r.Post("/batch", catHandler.GetByIDs)
+		})
+
 		// --- Rutas Protegidas (requieren Bearer token válido) ---
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireAuth(authSvc))
 
 			r.Post("/auth/logout", authHandler.HandleLogout)
-
-			r.Route("/products", func(r chi.Router) {
-				r.Get("/", catHandler.List)
-				r.Get("/{id}", catHandler.Single)
-				r.Get("/categories", catHandler.Categories)
-				r.Post("/batch", catHandler.GetByIDs)
-			})
 
 			r.Route("/cart", func(r chi.Router) {
 				r.Get("/", cartHandler.HandleGetCart)

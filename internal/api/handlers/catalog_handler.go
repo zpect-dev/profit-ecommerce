@@ -72,7 +72,7 @@ func (h *CatalogHandler) Single(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CatalogHandler) List(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query().Get("q")
+	search := r.URL.Query().Get("q")
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	category := r.URL.Query().Get("category")
@@ -87,8 +87,9 @@ func (h *CatalogHandler) List(w http.ResponseWriter, r *http.Request) {
 		limit = 20
 	}
 
-	products, err := h.repo.ListProducts(r.Context(), page, limit, q, category, inStock, hasDiscount)
+	products, err := h.repo.ListProducts(r.Context(), page, limit, search, category, inStock, hasDiscount)
 	if err != nil {
+		fmt.Printf("Error ListProducts: %v\n", err)
 		http.Error(w, "Error interno del servidor", http.StatusInternalServerError)
 		return
 	}

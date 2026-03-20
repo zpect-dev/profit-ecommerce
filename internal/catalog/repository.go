@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
@@ -17,6 +18,23 @@ type Repository struct {
 // NewRepository crea una nueva instancia del repositorio de catálogo.
 func NewRepository(db *sqlx.DB) *Repository {
 	return &Repository{db: db}
+}
+
+func formatPrefixQuery(query string) string {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return ""
+	}
+	words := strings.Fields(query)
+	var formatted []string
+	for _, w := range words {
+		w = strings.ReplaceAll(w, "'", "")
+		w = strings.ReplaceAll(w, `"`, "")
+		if w != "" {
+			formatted = append(formatted, w+":*")
+		}
+	}
+	return strings.Join(formatted, " & ")
 }
 
 func (r *Repository) GetProductsByIDs(ctx context.Context, ids []string) ([]Product, error) {
@@ -83,19 +101,37 @@ func (r *Repository) ListProducts(ctx context.Context, page int, limit int, sear
 		extraFilters += " AND (COALESCE(d_art.porc1, 0) > 0 OR COALESCE(d_cat.porc1, 0) > 0 OR COALESCE(d_lin.porc1, 0) > 0)"
 	}
 
+	// Filtro de búsqueda: Si hay texto, usamos FTS con prefix matching (to_tsquery).
+	searchFilter := "CAST($1 AS TEXT) = '' OR 1=1"
+	orderBy := "a.art_des ASC"
+	ftsQuery := ""
+	
+	if search != "" {
+		ftsQuery = formatPrefixQuery(search)
+		if ftsQuery != "" {
+			searchFilter = "a.search_vector @@ to_tsquery('spanish', $1)"
+			orderBy = "ts_rank(a.search_vector, to_tsquery('spanish', $1)) DESC"
+		}
+	}
+
 	query := fmt.Sprintf(`
         %s 
-        WHERE (a.art_des ILIKE $1 OR a.co_art ILIKE $1 OR a.campo4 ILIKE $1) 
+        WHERE %s 
         AND ($4 = '' OR a.co_lin = $4)
         %s
-        ORDER BY a.art_des ASC
+        ORDER BY %s
         LIMIT $2 OFFSET $3
-    `, baseQuery, extraFilters)
-
-	searchTerm := "%" + search + "%"
+    `, baseQuery, searchFilter, extraFilters, orderBy)
 
 	var products []Product
-	err := r.db.SelectContext(ctx, &products, query, searchTerm, limit, offset, category)
+	var err error
+
+	if ftsQuery != "" {
+		err = r.db.SelectContext(ctx, &products, query, ftsQuery, limit, offset, category)
+	} else {
+		err = r.db.SelectContext(ctx, &products, query, "", limit, offset, category)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("error obteniendo productos: %w", err)
 	}
