@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS clientes;
+DROP TABLE IF EXISTS tipo_cli;

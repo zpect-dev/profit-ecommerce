@@ -129,7 +129,20 @@ func (s *Service) RunFastSync(ctx context.Context) {
 	}
 	s.syncStAlmacPaginated(ctx)
 
-	// 4. Recalcular JSON de inventario
+	// 4. Clientes y Tipos de Cliente
+	if err := ctx.Err(); err != nil {
+		log.Printf("Fast Sync cancelado antes de clientes: %v", err)
+		return
+	}
+	if items, err := s.source.FetchTiposCli(ctx); err != nil {
+		log.Printf("Error fetching tipos_cli: %v", err)
+	} else {
+		count, _ := s.dest.UpsertTiposCli(ctx, items)
+		fmt.Printf("Tipos de Clientes sincronizados: %d\n", count)
+	}
+	s.syncClientesPaginated(ctx)
+
+	// 5. Recalcular JSON de inventario
 	if err := ctx.Err(); err != nil {
 		log.Printf("Fast Sync cancelado antes de recalcular JSON: %v", err)
 		return
@@ -218,4 +231,39 @@ func (s *Service) syncStAlmacPaginated(ctx context.Context) {
 	}
 
 	fmt.Printf("Stock almacen sincronizado total: %d\n", totalCount)
+}
+
+// syncClientesPaginated lee clientes master en páginas de pageSize y los sincroniza.
+func (s *Service) syncClientesPaginated(ctx context.Context) {
+	totalCount := 0
+	offset := 0
+
+	for {
+		if err := ctx.Err(); err != nil {
+			log.Printf("Sync clientes cancelado en offset %d: %v", offset, err)
+			return
+		}
+
+		page, err := s.source.FetchClientesPage(ctx, pageSize, offset)
+		if err != nil {
+			log.Printf("Error fetching clientes (offset=%d): %v", offset, err)
+			return
+		}
+
+		if len(page) == 0 {
+			break
+		}
+
+		count, _ := s.dest.UpsertClientes(ctx, page)
+		totalCount += count
+		offset += len(page)
+
+		fmt.Printf("  Clientes sincronizados: página offset=%d, filas=%d\n", offset-len(page), count)
+
+		if len(page) < pageSize {
+			break
+		}
+	}
+
+	fmt.Printf("Clientes sincronizados total: %d\n", totalCount)
 }

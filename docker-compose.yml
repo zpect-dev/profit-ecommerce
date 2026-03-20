@@ -1,51 +1,68 @@
 services:
-  db:
-    image: postgres:15-alpine
-    container_name: profit_pg
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=secret
-      - POSTGRES_DB=profit_ecommerce
-    ports:
-      - "5432:5432"
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+    db:
+        image: postgres:15-alpine
+        container_name: profit_pg
+        environment:
+            - POSTGRES_USER=postgres
+            - POSTGRES_PASSWORD=secret
+            - POSTGRES_DB=profit_ecommerce
+        ports:
+            - "5432:5432"
+        volumes:
+            - pg_data:/var/lib/postgresql/data
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U postgres"]
+            interval: 5s
+            timeout: 5s
+            retries: 5
 
-  api:
-    build: .
-    container_name: profit_api
-    command: /app/api
-    ports:
-      - "8050:8050"
-    depends_on:
-      db:
-        condition: service_healthy
-    env_file:
-      - .env
-    environment:
-      - POSTGRES_URL=postgres://postgres:secret@db:5432/profit_ecommerce?sslmode=disable
+    redis:
+        image: redis:7-alpine
+        container_name: profit_redis
+        ports:
+            - "6379:6379"
+        volumes:
+            - redis_data:/data
+        healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 5s
+            timeout: 5s
+            retries: 5
 
-  syncer:
-    build: .
-    container_name: profit_syncer
-    command: /app/syncer
-    depends_on:
-      db:
-        condition: service_healthy
-    env_file:
-      - .env
-    environment:
-      - POSTGRES_URL=postgres://postgres:secret@db:5432/profit_ecommerce?sslmode=disable
+    api:
+        build: .
+        container_name: profit_api
+        command: /app/api
+        ports:
+            - "8050:8050"
+        depends_on:
+            db:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+        env_file:
+            - .env
+        environment:
+            - POSTGRES_URL=postgres://postgres:secret@db:5432/profit_ecommerce?sslmode=disable
+            - REDIS_URL=redis:6379
 
-  adminer:
-    image: adminer
-    ports:
-      - "8081:8080"
+    syncer:
+        build: .
+        container_name: profit_syncer
+        command: /app/syncer
+        depends_on:
+            db:
+                condition: service_healthy
+        env_file:
+            - .env
+        environment:
+            - POSTGRES_URL=postgres://postgres:secret@db:5432/profit_ecommerce?sslmode=disable
+
+    adminer:
+        image: adminer
+        ports:
+            - "8081:8080"
 
 volumes:
-  pg_data:
+    pg_data:
+    redis_data:

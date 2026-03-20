@@ -72,3 +72,21 @@ type StAlmac struct {
 	StockDes  float64 `db:"stock_des"`
 	SStockDes float64 `db:"sstock_des"`
 }
+
+// TipoCli representa la tabla de de clasificaciones para el cliente (profit tip_cli).
+type TipoCli struct {
+	TipCli  string `db:"tip_cli" json:"tip_cli"`
+	DesTipo string `db:"des_tipo" json:"des_tipo"`
+	PrecioA string `db:"precio_a" json:"precio_a"`
+}
+
+// Cliente representa el registro master del cliente extraído desde (profit clientes).
+type Cliente struct {
+	CoCli    string  `db:"co_cli" json:"co_cli"`
+	Tipo     string  `db:"tipo" json:"tipo"`
+	CliDes   string  `db:"cli_des" json:"cli_des"`
+	Rif      string  `db:"rif" json:"rif"`
+	Inactivo bool    `db:"inactivo" json:"inactivo"`
+	Login    float64 `db:"login" json:"login"`
+	MontCre  float64 `db:"mont_cre" json:"mont_cre"`
+}

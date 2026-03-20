@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 
 	"github.com/jmoiron/sqlx"
@@ -240,6 +241,70 @@ func (r *SourceRepository) FetchStAlmacPage(ctx context.Context, limit, offset i
 		}
 		item.CoAlma = strings.TrimSpace(item.CoAlma)
 		item.CoArt = strings.TrimSpace(item.CoArt)
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (r *SourceRepository) FetchTiposCli(ctx context.Context) ([]TipoCli, error) {
+	var items []TipoCli
+	rows, err := r.db.QueryContext(ctx, "SELECT tip_cli, des_tipo, precio_a FROM tipo_cli")
+	if err != nil {
+		return nil, fmt.Errorf("error fetching tipo_cli: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var item TipoCli
+		if err := rows.Scan(&item.TipCli, &item.DesTipo, &item.PrecioA); err != nil {
+			log.Printf("Error scan tipo_cli: %v", err)
+			continue
+		}
+		item.TipCli = strings.TrimSpace(item.TipCli)
+		item.DesTipo = strings.TrimSpace(item.DesTipo)
+		item.PrecioA = strings.TrimSpace(item.PrecioA)
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (r *SourceRepository) FetchClientesPage(ctx context.Context, limit, offset int) ([]Cliente, error) {
+	query := `
+		SELECT co_cli, tipo, cli_des, rif, inactivo, login, mont_cre 
+		FROM clientes 
+		ORDER BY co_cli 
+		OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+	`
+	rows, err := r.db.QueryContext(ctx, query, sql.Named("offset", offset), sql.Named("limit", limit))
+	if err != nil {
+		return nil, fmt.Errorf("error fetching clientes page (offset=%d): %w", offset, err)
+	}
+	defer rows.Close()
+
+	var items []Cliente
+	for rows.Next() {
+		var item Cliente
+		var loginStr, montCreStr sql.NullString
+		
+		if err := rows.Scan(&item.CoCli, &item.Tipo, &item.CliDes, &item.Rif, &item.Inactivo, &loginStr, &montCreStr); err != nil {
+			log.Printf("Error scan cliente: %v", err)
+			continue
+		}
+		item.CoCli = strings.TrimSpace(item.CoCli)
+		item.Tipo = strings.TrimSpace(item.Tipo)
+		item.CliDes = strings.TrimSpace(item.CliDes)
+		item.Rif = strings.TrimSpace(item.Rif)
+
+		if loginStr.Valid {
+			if val, err := strconv.ParseFloat(strings.TrimSpace(loginStr.String), 64); err == nil {
+				item.Login = val
+			}
+		}
+		if montCreStr.Valid {
+			if val, err := strconv.ParseFloat(strings.TrimSpace(montCreStr.String), 64); err == nil {
+				item.MontCre = val
+			}
+		}
+
 		items = append(items, item)
 	}
 	return items, rows.Err()
@@ -604,4 +669,60 @@ func (r *DestRepository) RecalculateInventoryJSON(ctx context.Context) error {
 		return fmt.Errorf("error actualizando inventory JSON: %w", err)
 	}
 	return nil
+}
+
+func (r *DestRepository) UpsertTiposCli(ctx context.Context, items []TipoCli) (int, error) {
+	const cols = 3
+	count := 0
+	for i := 0; i < len(items); i += batchSize {
+		end := i + batchSize
+		if end > len(items) {
+			end = len(items)
+		}
+		chunk := items[i:end]
+
+		args := make([]interface{}, 0, len(chunk)*cols)
+		for _, item := range chunk {
+			args = append(args, item.TipCli, item.DesTipo, item.PrecioA)
+		}
+
+		queryTpl := `
+			INSERT INTO tipo_cli (tip_cli, des_tipo, precio_a) VALUES %s
+			ON CONFLICT (tip_cli) DO UPDATE SET 
+				des_tipo = EXCLUDED.des_tipo, 
+				precio_a = EXCLUDED.precio_a
+		`
+		count += r.execBatchWithFallback(ctx, queryTpl, args, cols)
+	}
+	return count, nil
+}
+
+func (r *DestRepository) UpsertClientes(ctx context.Context, items []Cliente) (int, error) {
+	const cols = 7
+	count := 0
+	for i := 0; i < len(items); i += batchSize {
+		end := i + batchSize
+		if end > len(items) {
+			end = len(items)
+		}
+		chunk := items[i:end]
+
+		args := make([]interface{}, 0, len(chunk)*cols)
+		for _, item := range chunk {
+			args = append(args, item.CoCli, item.Tipo, item.CliDes, item.Rif, item.Inactivo, item.Login, item.MontCre)
+		}
+
+		queryTpl := `
+			INSERT INTO clientes (co_cli, tipo, cli_des, rif, inactivo, login, mont_cre) VALUES %s
+			ON CONFLICT (co_cli) DO UPDATE SET 
+				tipo = EXCLUDED.tipo, 
+				cli_des = EXCLUDED.cli_des, 
+				rif = EXCLUDED.rif, 
+				inactivo = EXCLUDED.inactivo, 
+				login = EXCLUDED.login,
+				mont_cre = EXCLUDED.mont_cre
+		`
+		count += r.execBatchWithFallback(ctx, queryTpl, args, cols)
+	}
+	return count, nil
 }
