@@ -16,9 +16,6 @@ COPY . .
 # Compilar API
 RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/api ./cmd/api
 
-# Compilar Syncer
-RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/syncer ./cmd/syncer
-
 # Final Stage
 FROM alpine:3.19
 
@@ -29,7 +26,6 @@ RUN apk --no-cache add ca-certificates tzdata
 
 # Copiar binarios del builder
 COPY --from=builder /app/bin/api /app/api
-COPY --from=builder /app/bin/syncer /app/syncer
 COPY --from=builder /app/db ./db
 # Exponer puerto de la API (informativo)
 EXPOSE 8050
