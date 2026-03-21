@@ -1,1 +1,0 @@
-ALTER TABLE art ADD COLUMN IF NOT EXISTS inventory_json JSONB DEFAULT '{}';

@@ -1,3 +1,0 @@
-DROP TABLE IF EXISTS st_almac;
-DROP TABLE IF EXISTS sub_alma;
-DROP TABLE IF EXISTS almacen;
