@@ -25,20 +25,3 @@ func ConnectPostgres(url string) (*sqlx.DB, error) {
 	log.Println("Conectado a Postgres")
 	return db, nil
 }
-
-func ConnectSQLServer(connStr string) (*sqlx.DB, error) {
-	if connStr == "" {
-		return nil, fmt.Errorf("connection string de SQL Server vacía")
-	}
-	db, err := sqlx.Open("sqlserver", connStr)
-	if err != nil {
-		return nil, fmt.Errorf("error abriendo conexión a SQL Server: %w", err)
-	}
-
-	if err := db.Ping(); err != nil {
-		return nil, fmt.Errorf("error conectando a SQL Server: %w", err)
-	}
-
-	log.Println("Conectado a SQL Server")
-	return db, nil
-}
